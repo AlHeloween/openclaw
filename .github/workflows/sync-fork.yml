@@ -1,0 +1,22 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork with upstream
+        uses: repo-sync/github-sync@v2
+        with:
+          source_repo: https://github.com/openclaw/openclaw
+          source_branch: main
+          destination_branch: main
+          github_token: ${{ secrets.GITHUB_TOKEN }}
