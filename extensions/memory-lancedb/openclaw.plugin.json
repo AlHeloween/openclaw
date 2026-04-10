@@ -48,6 +48,22 @@
       "help": "Maximum message length eligible for auto-capture",
       "advanced": true,
       "placeholder": "500"
+    },
+    "embeddingMultimodal.enabled": {
+      "label": "Multimodal Mode",
+      "help": "Enable dual-embedding with Harrier + ImageBind. Open dashboard at /plugins/memory-lancedb"
+    },
+    "search.text": {
+      "label": "Text Weight",
+      "placeholder": "0.6",
+      "help": "Fusion weight for text embedding (default: 0.6)",
+      "advanced": true
+    },
+    "search.multi": {
+      "label": "Multimodal Weight",
+      "placeholder": "0.4",
+      "help": "Fusion weight for multimodal embedding (default: 0.4)",
+      "advanced": true
     }
   },
   "configSchema": {
@@ -80,6 +96,15 @@
       "namespace": {
         "type": "string"
       },
+      "embeddingMultimodal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "dbPath": {
         "type": "string"
       },
@@ -93,6 +118,22 @@
         "type": "number",
         "minimum": 100,
         "maximum": 10000
+      },
+      "search": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "multi": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
       }
     },
     "required": ["embedding"]

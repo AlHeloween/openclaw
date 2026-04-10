@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Memory Browser — OpenClaw</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #8b949e;
+        --accent: #58a6ff;
+        --accent2: #3fb950;
+        --accent3: #f0883e;
+        --accent4: #d2a8ff;
+        --danger: #f85149;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        line-height: 1.6;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 20px 0 10px;
+        color: var(--text-dim);
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .controls select,
+      .controls input,
+      .controls button {
+        padding: 8px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .controls button {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .controls button:hover {
+        opacity: 0.85;
+      }
+      .controls input[type="text"] {
+        width: 300px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+      }
+      .stat-card .value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-card .label {
+        font-size: 12px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .memories {
+        display: grid;
+        gap: 10px;
+      }
+      .memory-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+      .memory-card:hover {
+        border-color: var(--accent);
+      }
+      .memory-card .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .memory-card .category {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: var(--border);
+        color: var(--text-dim);
+      }
+      .memory-card .score {
+        font-size: 12px;
+        color: var(--accent2);
+        font-weight: 600;
+      }
+      .memory-card .text {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text);
+      }
+      .memory-card .meta {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .cluster-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+      .cluster-0 {
+        background: rgba(88, 166, 255, 0.2);
+        color: var(--accent);
+      }
+      .cluster-1 {
+        background: rgba(63, 185, 80, 0.2);
+        color: var(--accent2);
+      }
+      .cluster-2 {
+        background: rgba(240, 136, 62, 0.2);
+        color: var(--accent3);
+      }
+      .cluster-3 {
+        background: rgba(210, 168, 255, 0.2);
+        color: var(--accent4);
+      }
+      .cluster-4 {
+        background: rgba(248, 81, 73, 0.2);
+        color: var(--danger);
+      }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 700px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+      .modal h3 {
+        margin-bottom: 12px;
+        font-size: 18px;
+      }
+      .modal .close {
+        float: right;
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 24px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .modal .close:hover {
+        color: var(--text);
+      }
+      .modal pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+        overflow-x: auto;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .chart-container {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+      }
+      .chart-container canvas {
+        max-width: 100%;
+      }
+      .filter-tags {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .filter-tag {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        background: var(--border);
+        color: var(--text-dim);
+        cursor: pointer;
+      }
+      .filter-tag.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-dim);
+      }
+      .hidden {
+        display: none !important;
+      }
+      .tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        border-bottom: none;
+        color: var(--text-dim);
+        font-weight: 500;
+        border-radius: 8px 8px 0 0;
+        margin-right: 4px;
+        transition: all 0.2s;
+      }
+      .tab:hover {
+        color: var(--text);
+        background: var(--surface);
+      }
+      .tab.active {
+        color: var(--accent);
+        border-color: var(--border);
+        background: var(--surface);
+        border-bottom-color: var(--surface);
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+      .api-key-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .api-key-box code {
+        font-family: "SF Mono", "Cascadia Code", monospace;
+        font-size: 14px;
+        background: var(--bg);
+        padding: 4px 8px;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+      .api-key-box .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .usage-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .usage-table th {
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-dim);
+        font-weight: 600;
+      }
+      .usage-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .usage-table tr:last-child td {
+        border-bottom: none;
+      }
+      .success-badge {
+        color: var(--accent2);
+      }
+      .error-badge {
+        color: var(--danger);
+      }
+      .btn-danger {
+        background: var(--danger) !important;
+        border-color: var(--danger) !important;
+      }
+      .btn-danger:hover {
+        opacity: 0.85 !important;
+      }
+      .usage-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .usage-summary .stat-card .value {
+        font-size: 22px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+        Memory Browser
+      </h1>
+
+      <div class="tabs" role="tablist">
+        <div
+          class="tab active"
+          data-tab="memories"
+          onclick="switchTab('memories')"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-memories"
+          tabindex="0"
+        >
+          Memories
+        </div>
+        <div
+          class="tab"
+          data-tab="api"
+          onclick="switchTab('api')"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-api"
+          tabindex="-1"
+        >
+          API
+        </div>
+      </div>
+
+      <div class="tab-panel active" id="panel-memories" role="tabpanel">
+        <div class="stats" id="stats"></div>
+
+        <div class="controls">
+          <input type="text" id="searchInput" placeholder="Search memories..." />
+          <select id="categoryFilter">
+            <option value="">All categories</option>
+            <option value="preference">Preference</option>
+            <option value="fact">Fact</option>
+            <option value="decision">Decision</option>
+            <option value="entity">Entity</option>
+            <option value="other">Other</option>
+          </select>
+          <select id="modalityFilter">
+            <option value="">All modalities</option>
+            <option value="text">Text</option>
+            <option value="image">Image</option>
+            <option value="audio">Audio</option>
+            <option value="multimodal">Multimodal</option>
+          </select>
+          <select id="clusterK">
+            <option value="0">No clustering</option>
+            <option value="2">2 clusters</option>
+            <option value="3">3 clusters</option>
+            <option value="4">4 clusters</option>
+            <option value="5">5 clusters</option>
+            <option value="-1">Auto-detect K</option>
+          </select>
+          <button id="searchBtn">Search</button>
+          <button id="clusterBtn">Cluster</button>
+          <button id="refreshBtn">Refresh</button>
+        </div>
+
+        <div id="filterTags" class="filter-tags"></div>
+
+        <div class="chart-container">
+          <canvas id="similarityChart" width="800" height="200"></canvas>
+        </div>
+
+        <div id="memories" class="memories"></div>
+      </div>
+
+      <div class="tab-panel" id="panel-api" role="tabpanel">
+        <div class="api-key-box">
+          <h3 style="margin-bottom: 12px">API Key</h3>
+          <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 8px">
+            Use this key to authenticate requests to the OpenAI-compatible API endpoints at
+            <code>/plugins/memory-lancedb/api/v1/</code>.
+          </p>
+          <div id="apiKeyDisplay">
+            <div class="loading">Loading...</div>
+          </div>
+          <div class="actions">
+            <button id="showKeyBtn" onclick="showApiKey()">Show Key</button>
+            <button id="regenerateKeyBtn" class="btn-danger" onclick="regenerateApiKey()">
+              Regenerate
+            </button>
+          </div>
+        </div>
+
+        <div class="api-key-box">
+          <h3 style="margin-bottom: 12px">Usage Statistics</h3>
+          <div id="usageSummary" class="usage-summary">
+            <div class="loading">Loading...</div>
+          </div>
+          <div class="chart-container" style="margin-top: 16px">
+            <canvas id="usageChart" width="800" height="200"></canvas>
+          </div>
+          <div style="margin-top: 16px">
+            <h4 style="margin-bottom: 8px; font-size: 14px">Recent Requests</h4>
+            <table class="usage-table" id="usageTable">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Endpoint</th>
+                  <th>Method</th>
+                  <th>Duration</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="usageTableBody"></tbody>
+            </table>
+          </div>
+          <div class="actions" style="margin-top: 16px">
+            <button id="refreshUsageBtn" onclick="loadUsage()">Refresh</button>
+            <button class="btn-danger" onclick="clearUsage()">Clear All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal-overlay"
+      id="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalTitle"
+    >
+      <div class="modal">
+        <button class="close" onclick="closeModal()" aria-label="Close modal">&times;</button>
+        <h3 id="modalTitle"></h3>
+        <div id="modalContent"></div>
+      </div>
+    </div>
+
+    <script>
+      let allMemories = [];
+      let clusteredMemories = [];
+      let clusterData = null;
+
+      const COLORS = [
+        "#58a6ff",
+        "#3fb950",
+        "#f0883e",
+        "#d2a8ff",
+        "#f85149",
+        "#a5d6ff",
+        "#56d4af",
+        "#e5c07b",
+      ];
+
+      async function loadMemories() {
+        document.getElementById("memories").innerHTML =
+          '<div class="loading">Loading memories...</div>';
+        try {
+          const res = await fetch("api/memories");
+          allMemories = await res.json();
+          renderStats();
+          renderMemories(allMemories);
+          renderChart(allMemories);
+        } catch (e) {
+          document.getElementById("memories").innerHTML =
+            '<div class="loading">Error loading memories. Make sure the server is running.</div>';
+        }
+      }
+
+      function renderStats() {
+        const byCategory = {};
+        const byModality = {};
+        for (const m of allMemories) {
+          byCategory[m.category] = (byCategory[m.category] || 0) + 1;
+          byModality[m.modality || "text"] = (byModality[m.modality || "text"] || 0) + 1;
+        }
+        document.getElementById("stats").innerHTML = `
+    <div class="stat-card"><div class="value">${allMemories.length}</div><div class="label">Total</div></div>
+    <div class="stat-card"><div class="value">${Object.keys(byCategory).length}</div><div class="label">Categories</div></div>
+    <div class="stat-card"><div class="value">${Object.keys(byModality).length}</div><div class="label">Modalities</div></div>
+    <div class="stat-card"><div class="value">${Object.values(byCategory).reduce((a, b) => a + b, 0)}</div><div class="label">Entries</div></div>
+  `;
+      }
+
+      function renderMemories(memories) {
+        const container = document.getElementById("memories");
+        if (memories.length === 0) {
+          container.innerHTML = '<div class="loading">No memories found.</div>';
+          return;
+        }
+        container.innerHTML = memories
+          .map(
+            (m, i) => `
+    <div class="memory-card" onclick="showMemory(${i})">
+      <div class="header">
+        <span class="category">${escapeHtml(m.category || "other")}</span>
+        <span class="score">${m.score ? (m.score * 100).toFixed(0) + "%" : ""}</span>
+      </div>
+      <div class="text">${escapeHtml(m.text.slice(0, 200))}${m.text.length > 200 ? "..." : ""}</div>
+      <div class="meta">
+        <span>Modality: ${escapeHtml(m.modality || "text")}</span>
+        <span>Importance: ${(m.importance || 0).toFixed(2)}</span>
+        ${m.clusterId !== undefined ? `<span class="cluster-badge cluster-${m.clusterId % COLORS.length}">Cluster ${escapeHtml(String(m.clusterId))}</span>` : ""}
+        ${m.distanceToCentroid !== undefined ? `<span>Dist: ${m.distanceToCentroid.toFixed(3)}</span>` : ""}
+      </div>
+    </div>
+  `,
+          )
+          .join("");
+      }
+
+      function renderChart(memories) {
+        const canvas = document.getElementById("similarityChart");
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (memories.length < 2) return;
+
+        const scores = memories.map((m) => m.score || Math.random()).filter((s) => s !== undefined);
+        const maxScore = Math.max(...scores, 1);
+        const barW = Math.max(4, Math.min(30, (w - 60) / scores.length));
+        const gap = (w - 60) / scores.length;
+
+        ctx.fillStyle = "#8b949e";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Similarity Distribution", 10, 20);
+
+        for (let i = 0; i < scores.length; i++) {
+          const barH = (scores[i] / maxScore) * (h - 60);
+          const x = 30 + i * gap;
+          const y = h - 30 - barH;
+          const clusterId = memories[i].clusterId;
+          ctx.fillStyle = clusterId !== undefined ? COLORS[clusterId % COLORS.length] : "#58a6ff";
+          ctx.fillRect(x, y, barW - 2, barH);
+        }
+
+        ctx.fillStyle = "#8b949e";
+        ctx.fillText("0", 5, h - 10);
+        ctx.fillText("1", w - 15, h - 10);
+      }
+
+      function showMemory(idx) {
+        const m = clusteredMemories[idx] || allMemories[idx];
+        if (!m) return;
+        document.getElementById("modalTitle").textContent =
+          `[${m.category || "other"}] ${m.modality || "text"}`;
+        document.getElementById("modalContent").innerHTML = `
+    <p><strong>Score:</strong> ${(m.score || 0).toFixed(4)}</p>
+    <p><strong>Importance:</strong> ${(m.importance || 0).toFixed(2)}</p>
+    <p><strong>Created:</strong> ${m.createdAt ? new Date(m.createdAt).toLocaleString() : "N/A"}</p>
+    ${m.clusterId !== undefined ? `<p><strong>Cluster:</strong> ${m.clusterId} (dist: ${(m.distanceToCentroid || 0).toFixed(4)})</p>` : ""}
+    <h3 style="margin-top:16px">Content</h3>
+    <pre>${escapeHtml(m.text)}</pre>
+    ${m.media ? `<h3 style="margin-top:16px">Media</h3><pre>${escapeHtml(JSON.stringify(m.media, null, 2))}</pre>` : ""}
+  `;
+        document.getElementById("modal").classList.add("active");
+      }
+
+      function closeModal() {
+        document.getElementById("modal").classList.remove("active");
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          const modal = document.getElementById("modal");
+          if (modal && modal.classList.contains("active")) {
+            closeModal();
+          }
+        }
+      });
+
+      function escapeHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      async function clusterMemories(k) {
+        try {
+          const res = await fetch("api/cluster", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ k: k === -1 ? undefined : k }),
+          });
+          clusterData = await res.json();
+          clusteredMemories = clusterData.clusters || [];
+          renderMemories(clusteredMemories);
+          renderChart(clusteredMemories);
+        } catch (e) {
+          console.error("Clustering failed:", e);
+        }
+      }
+
+      document.getElementById("searchBtn").addEventListener("click", () => {
+        const query = document.getElementById("searchInput").value;
+        if (query) {
+          const filtered = allMemories.filter((m) =>
+            m.text.toLowerCase().includes(query.toLowerCase()),
+          );
+          renderMemories(filtered);
+          renderChart(filtered);
+        }
+      });
+
+      document.getElementById("clusterBtn").addEventListener("click", () => {
+        const k = parseInt(document.getElementById("clusterK").value);
+        if (k === 0) {
+          renderMemories(allMemories);
+          renderChart(allMemories);
+        } else {
+          clusterMemories(k);
+        }
+      });
+
+      document.getElementById("refreshBtn").addEventListener("click", loadMemories);
+
+      document.getElementById("categoryFilter").addEventListener("change", applyFilters);
+      document.getElementById("modalityFilter").addEventListener("change", applyFilters);
+
+      function applyFilters() {
+        const cat = document.getElementById("categoryFilter").value;
+        const mod = document.getElementById("modalityFilter").value;
+        let filtered = allMemories;
+        if (cat) filtered = filtered.filter((m) => m.category === cat);
+        if (mod) filtered = filtered.filter((m) => (m.modality || "text") === mod);
+        renderMemories(filtered);
+      }
+
+      function switchTab(tab) {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+        document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
+        document.getElementById(`panel-${tab}`).classList.add("active");
+        if (tab === "api") {
+          loadApiKey();
+          loadUsage();
+        }
+      }
+
+      async function loadApiKey() {
+        const el = document.getElementById("apiKeyDisplay");
+        try {
+          const res = await fetch("../admin/api-key");
+          if (res.ok) {
+            const data = await res.json();
+            el.innerHTML = `<code>${escapeHtml(data.key)}</code>`;
+          } else {
+            el.innerHTML = `<code style="color: var(--accent3);">No key generated yet</code>`;
+          }
+        } catch (e) {
+          el.innerHTML = `<code style="color: var(--danger);">Error loading key</code>`;
+        }
+      }
+
+      async function showApiKey() {
+        try {
+          const res = await fetch("../admin/api-key");
+          if (res.ok) {
+            const data = await res.json();
+            document.getElementById("apiKeyDisplay").innerHTML =
+              `<code>${escapeHtml(data.key)}</code>`;
+          }
+        } catch (e) {
+          alert("Failed to load API key");
+        }
+      }
+
+      async function regenerateApiKey() {
+        if (!confirm("Regenerate API key? Existing integrations will break.")) return;
+        try {
+          const res = await fetch("../admin/api-key", { method: "POST" });
+          const data = await res.json();
+          document.getElementById("apiKeyDisplay").innerHTML =
+            `<code>${escapeHtml(data.key)}</code>`;
+          alert(`New API key: ${data.key}\n\nMasked: ${data.masked}`);
+        } catch (e) {
+          alert("Failed to regenerate key");
+        }
+      }
+
+      async function loadUsage() {
+        try {
+          const res = await fetch("../admin/usage");
+          const data = await res.json();
+          const s = data.summary;
+          document.getElementById("usageSummary").innerHTML = `
+            <div class="stat-card"><div class="value">${s.totalRequests}</div><div class="label">Total Requests</div></div>
+            <div class="stat-card"><div class="value" style="color: var(--accent2)">${s.successCount}</div><div class="label">Success</div></div>
+            <div class="stat-card"><div class="value" style="color: var(--danger)">${s.errorCount}</div><div class="label">Errors</div></div>
+            <div class="stat-card"><div class="value">${s.avgDurationMs}ms</div><div class="label">Avg Duration</div></div>
+          `;
+          renderUsageChart(data.records);
+          renderUsageTable(data.records.slice(-50).reverse());
+        } catch (e) {
+          document.getElementById("usageSummary").innerHTML =
+            '<div class="loading">No usage data yet.</div>';
+        }
+      }
+
+      function renderUsageChart(records) {
+        const canvas = document.getElementById("usageChart");
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (records.length === 0) {
+          ctx.fillStyle = "#8b949e";
+          ctx.font = "12px sans-serif";
+          ctx.fillText("No usage data", 10, h / 2);
+          return;
+        }
+
+        const byEndpoint = {};
+        for (const r of records) {
+          byEndpoint[r.endpoint] = (byEndpoint[r.endpoint] || 0) + 1;
+        }
+
+        const entries = Object.entries(byEndpoint);
+        const labels = entries.map(([e]) => e.replace("/api/v1/", ""));
+        const counts = entries.map(([, c]) => c);
+        const maxCount = Math.max(...counts, 1);
+        const barW = Math.max(20, Math.min(60, (w - 80) / entries.length));
+        const gap = (w - 80) / entries.length;
+
+        ctx.fillStyle = "#8b949e";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Requests by Endpoint", 10, 20);
+
+        for (let i = 0; i < entries.length; i++) {
+          const barH = (counts[i] / maxCount) * (h - 60);
+          const x = 30 + i * gap;
+          const y = h - 30 - barH;
+          ctx.fillStyle = COLORS[i % COLORS.length];
+          ctx.fillRect(x, y, barW - 4, barH);
+          ctx.fillStyle = "#8b949e";
+          ctx.font = "10px sans-serif";
+          ctx.save();
+          ctx.translate(x + barW / 2 - 4, h - 15);
+          ctx.rotate(-0.3);
+          ctx.fillText(labels[i].slice(0, 12), 0, 0);
+          ctx.restore();
+          ctx.fillStyle = "#e6edf3";
+          ctx.font = "11px sans-serif";
+          ctx.fillText(String(counts[i]), x + barW / 2 - 4, y - 4);
+        }
+      }
+
+      function renderUsageTable(records) {
+        const tbody = document.getElementById("usageTableBody");
+        if (records.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="color: var(--text-dim); text-align: center; padding: 20px;">No recent requests</td></tr>';
+          return;
+        }
+        tbody.innerHTML = records
+          .map(
+            (r) => `
+          <tr>
+            <td style="color: var(--text-dim);">${new Date(r.timestamp).toLocaleTimeString()}</td>
+            <td>${escapeHtml(r.endpoint)}</td>
+            <td><span style="font-size: 11px; background: var(--border); padding: 2px 6px; border-radius: 3px;">${escapeHtml(r.method)}</span></td>
+            <td>${r.durationMs}ms</td>
+            <td class="${r.success ? "success-badge" : "error-badge"}">${r.success ? "✓ OK" : "✗ Error"}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      async function clearUsage() {
+        if (!confirm("Clear all usage records? This cannot be undone.")) return;
+        try {
+          const res = await fetch("../admin/usage", { method: "DELETE" });
+          const data = await res.json();
+          alert(`Cleared ${data.removed} records.`);
+          loadUsage();
+        } catch (e) {
+          alert("Failed to clear usage records");
+        }
+      }
+
+      loadMemories();
+    </script>
+  </body>
+</html>

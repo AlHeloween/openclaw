@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveStateDir } from "./api.js";
+import { toPosixPath } from "./cross-platform-path.js";
 
 type LanceDbModule = typeof import("@lancedb/lancedb");
 
@@ -93,7 +94,7 @@ const MEMORY_LANCEDB_RUNTIME_MANIFEST: RuntimeManifest = (() => {
 })();
 
 function resolveRuntimeDir(stateDir: string): string {
-  return path.join(stateDir, "plugin-runtimes", "memory-lancedb", "lancedb");
+  return toPosixPath(path.join(stateDir, "plugin-runtimes", "memory-lancedb", "lancedb"));
 }
 
 function readRuntimeManifest(filePath: string): RuntimeManifest | null {

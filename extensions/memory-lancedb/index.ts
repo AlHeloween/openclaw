@@ -406,7 +406,7 @@ export default definePluginEntry({
     const multimodalEnabled =
       cfg.embeddingMultimodal &&
       typeof cfg.embeddingMultimodal === "object" &&
-      (cfg.embeddingMultimodal as Record<string, unknown>).enabled === true;
+      (cfg.embeddingMultimodal).enabled === true;
 
     let textEmbedder: EmbeddingProvider;
     let multiEmbedder: EmbeddingProvider | null = null;
@@ -477,7 +477,7 @@ export default definePluginEntry({
             const multiResults = await db.searchMulti(multiVector, limit * 2, 0.1, namespace);
 
             const fusionWeights = cfg.search && typeof cfg.search === "object"
-              ? { text: (cfg.search as Record<string, unknown>).text as number ?? 0.6, multi: (cfg.search as Record<string, unknown>).multi as number ?? 0.4 }
+              ? { text: (cfg.search).text as number ?? 0.6, multi: (cfg.search).multi as number ?? 0.4 }
               : DEFAULT_FUSION_WEIGHTS;
 
             const fused = fuseScores(
