@@ -11,7 +11,7 @@
     "embedding.model": {
       "label": "Embedding Model",
       "placeholder": "text-embedding-3-small",
-      "help": "OpenAI embedding model to use"
+      "help": "Embedding model to use (e.g. text-embedding-3-small, harrier-oss-v1-0.6b)"
     },
     "embedding.baseUrl": {
       "label": "Base URL",
@@ -24,6 +24,11 @@
       "placeholder": "1536",
       "help": "Vector dimensions for custom models (required for non-standard models)",
       "advanced": true
+    },
+    "namespace": {
+      "label": "Namespace",
+      "placeholder": "global",
+      "help": "Project/workspace namespace for memory isolation (e.g. project name or path)"
     },
     "dbPath": {
       "label": "Database Path",
@@ -53,6 +58,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["harrier", "openai", "composite"]
+          },
           "apiKey": {
             "type": "string"
           },
@@ -66,7 +75,10 @@
             "type": "number"
           }
         },
-        "required": ["apiKey"]
+        "required": ["provider"]
+      },
+      "namespace": {
+        "type": "string"
       },
       "dbPath": {
         "type": "string"

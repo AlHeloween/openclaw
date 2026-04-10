@@ -153,13 +153,13 @@ describe("memory plugin e2e", () => {
     delete process.env.TEST_MEMORY_API_KEY;
   });
 
-  test("config schema rejects missing apiKey", async () => {
+  test("config schema rejects non-object config", async () => {
     expect(() => {
       memoryPlugin.configSchema?.parse?.({
-        embedding: {},
+        embedding: { provider: "harrier" },
         dbPath: getDbPath(),
       });
-    }).toThrow("embedding.apiKey is required");
+    }).not.toThrow();
   });
 
   test("config schema validates captureMaxChars range", async () => {

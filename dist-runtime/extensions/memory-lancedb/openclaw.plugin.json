@@ -1,0 +1,149 @@
+{
+  "id": "memory-lancedb",
+  "kind": "memory",
+  "uiHints": {
+    "embedding.apiKey": {
+      "label": "OpenAI API Key",
+      "sensitive": true,
+      "placeholder": "sk-proj-...",
+      "help": "API key for OpenAI embeddings (or use ${OPENAI_API_KEY})"
+    },
+    "embedding.model": {
+      "label": "Embedding Model",
+      "placeholder": "text-embedding-3-small",
+      "help": "Embedding model to use (e.g. text-embedding-3-small, harrier-oss-v1-0.6b)"
+    },
+    "embedding.baseUrl": {
+      "label": "Base URL",
+      "placeholder": "https://api.openai.com/v1",
+      "help": "Base URL for compatible providers (e.g. http://localhost:11434/v1)",
+      "advanced": true
+    },
+    "embedding.dimensions": {
+      "label": "Dimensions",
+      "placeholder": "1536",
+      "help": "Vector dimensions for custom models (required for non-standard models)",
+      "advanced": true
+    },
+    "namespace": {
+      "label": "Namespace",
+      "placeholder": "global",
+      "help": "Project/workspace namespace for memory isolation (e.g. project name or path)"
+    },
+    "dbPath": {
+      "label": "Database Path",
+      "placeholder": "~/.openclaw/memory/lancedb",
+      "advanced": true
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Automatically capture important information from conversations"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Automatically inject relevant memories into context"
+    },
+    "captureMaxChars": {
+      "label": "Capture Max Chars",
+      "help": "Maximum message length eligible for auto-capture",
+      "advanced": true,
+      "placeholder": "500"
+    },
+    "embeddingMultimodal.enabled": {
+      "label": "Multimodal Mode",
+      "help": "Enable dual-embedding with Harrier + ImageBind. Open dashboard at /plugins/memory-lancedb"
+    },
+    "search.text": {
+      "label": "Text Weight",
+      "placeholder": "0.6",
+      "help": "Fusion weight for text embedding (default: 0.6)",
+      "advanced": true
+    },
+    "search.multi": {
+      "label": "Multimodal Weight",
+      "placeholder": "0.4",
+      "help": "Fusion weight for multimodal embedding (default: 0.4)",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "embedding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "harrier",
+              "openai",
+              "composite"
+            ]
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "provider"
+        ]
+      },
+      "namespace": {
+        "type": "string"
+      },
+      "embeddingMultimodal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "dbPath": {
+        "type": "string"
+      },
+      "autoCapture": {
+        "type": "boolean"
+      },
+      "autoRecall": {
+        "type": "boolean"
+      },
+      "captureMaxChars": {
+        "type": "number",
+        "minimum": 100,
+        "maximum": 10000
+      },
+      "search": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "multi": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "required": [
+      "embedding"
+    ]
+  }
+}

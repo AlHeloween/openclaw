@@ -11,20 +11,31 @@ import type * as LanceDB from "@lancedb/lancedb";
 import { Type } from "@sinclair/typebox";
 import OpenAI from "openai";
 import { ensureGlobalUndiciEnvProxyDispatcher } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { definePluginEntry, type OpenClawPluginApi } from "./api.js";
+import { createOpenAICompatHandler } from "./api/openai-compat.js";
 import {
   DEFAULT_CAPTURE_MAX_CHARS,
+  DEFAULT_FUSION_WEIGHTS,
   MEMORY_CATEGORIES,
+  MEMORY_MODALITIES,
   type MemoryCategory,
+  type MemoryModality,
   memoryConfigSchema,
   vectorDimsForModel,
 } from "./config.js";
+import { HarrierEmbeddings } from "./embeddings/harrier.js";
+import { ImageBindEmbeddings } from "./embeddings/imagebind.js";
+import type { EmbeddingProvider } from "./embeddings/provider.js";
 import { loadLanceDbModule } from "./lancedb-runtime.js";
+import { fuseScores } from "./search/fusion.js";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+function toLower(s: string): string {
+  return (s ?? "").toLowerCase();
+}
 
 type MemoryEntry = {
   id: string;
@@ -33,11 +44,16 @@ type MemoryEntry = {
   importance: number;
   category: MemoryCategory;
   createdAt: number;
+  namespace: string;
+  modality: MemoryModality;
+  multiVector?: number[];
 };
 
 type MemorySearchResult = {
   entry: MemoryEntry;
   score: number;
+  textScore?: number;
+  multiScore?: number;
 };
 
 // ============================================================================
@@ -50,11 +66,15 @@ class MemoryDB {
   private db: LanceDB.Connection | null = null;
   private table: LanceDB.Table | null = null;
   private initPromise: Promise<void> | null = null;
+  private defaultNamespace: string;
 
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
-  ) {}
+    defaultNamespace?: string,
+  ) {
+    this.defaultNamespace = defaultNamespace ?? "global";
+  }
 
   private async ensureInitialized(): Promise<void> {
     if (this.table) {
@@ -84,6 +104,8 @@ class MemoryDB {
           importance: 0,
           category: "other",
           createdAt: 0,
+          namespace: "global",
+          modality: "text" as MemoryModality,
         },
       ]);
       await this.table.delete('id = "__schema__"');
@@ -97,21 +119,27 @@ class MemoryDB {
       ...entry,
       id: randomUUID(),
       createdAt: Date.now(),
+      namespace: entry.namespace || this.defaultNamespace,
+      modality: entry.modality || "text",
     };
 
     await this.table!.add([fullEntry]);
     return fullEntry;
   }
 
-  async search(vector: number[], limit = 5, minScore = 0.5): Promise<MemorySearchResult[]> {
+  async search(
+    vector: number[],
+    limit = 5,
+    minScore = 0.5,
+    namespace?: string,
+  ): Promise<MemorySearchResult[]> {
     await this.ensureInitialized();
 
-    const results = await this.table!.vectorSearch(vector).limit(limit).toArray();
+    const targetNs = namespace ?? this.defaultNamespace;
+    const results = await this.table!.vectorSearch(vector).limit(limit * 3).toArray();
 
-    // LanceDB uses L2 distance by default; convert to similarity score
     const mapped = results.map((row) => {
       const distance = row._distance ?? 0;
-      // Use inverse for a 0-1 range: sim = 1 / (1 + d)
       const score = 1 / (1 + distance);
       return {
         entry: {
@@ -119,19 +147,73 @@ class MemoryDB {
           text: row.text as string,
           vector: row.vector as number[],
           importance: row.importance as number,
-          category: row.category as MemoryEntry["category"],
+          category: row.category as MemoryCategory,
           createdAt: row.createdAt as number,
+          namespace: (row.namespace as string) || "global",
+          modality: (row.modality as MemoryModality) || "text",
+          multiVector: row.multiVector as number[] | undefined,
         },
         score,
+        textScore: score,
+        multiScore: undefined,
       };
     });
 
-    return mapped.filter((r) => r.score >= minScore);
+    const filtered = mapped.filter((r) => {
+      if (targetNs === "all") {return true;}
+      return r.entry.namespace === targetNs || r.entry.namespace === "global";
+    });
+
+    return filtered
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .filter((r) => r.score >= minScore);
+  }
+
+  async searchMulti(
+    vector: number[],
+    limit = 5,
+    minScore = 0.5,
+    namespace?: string,
+  ): Promise<MemorySearchResult[]> {
+    await this.ensureInitialized();
+
+    const targetNs = namespace ?? this.defaultNamespace;
+    const results = await this.table!.vectorSearch(vector).limit(limit * 3).toArray();
+
+    const mapped = results.map((row) => {
+      const distance = row._distance ?? 0;
+      const score = 1 / (1 + distance);
+      return {
+        entry: {
+          id: row.id as string,
+          text: row.text as string,
+          vector: row.vector as number[],
+          importance: row.importance as number,
+          category: row.category as MemoryCategory,
+          createdAt: row.createdAt as number,
+          namespace: (row.namespace as string) || "global",
+          modality: (row.modality as MemoryModality) || "text",
+          multiVector: row.multiVector as number[] | undefined,
+        },
+        score,
+        multiScore: score,
+      };
+    });
+
+    const filtered = mapped.filter((r) => {
+      if (targetNs === "all") {return true;}
+      return r.entry.namespace === targetNs || r.entry.namespace === "global";
+    });
+
+    return filtered
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .filter((r) => r.score >= minScore);
   }
 
   async delete(id: string): Promise<boolean> {
     await this.ensureInitialized();
-    // Validate UUID format to prevent injection
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       throw new Error(`Invalid memory ID format: ${id}`);
@@ -140,9 +222,32 @@ class MemoryDB {
     return true;
   }
 
-  async count(): Promise<number> {
+  async deleteByNamespace(ns: string): Promise<number> {
     await this.ensureInitialized();
-    return this.table!.countRows();
+    const count = await this.table!.countRows();
+    await this.table!.delete(`namespace = '${ns.replace(/'/g, "''")}'`);
+    const remaining = await this.table!.countRows();
+    return count - remaining;
+  }
+
+  async count(namespace?: string): Promise<number> {
+    await this.ensureInitialized();
+    if (!namespace || namespace === "all") {
+      return this.table!.countRows();
+    }
+    const ns = namespace.replace(/'/g, "''");
+    const allRows = await this.table!.search(Array.from({ length: this.vectorDim }).fill(0) as number[]).limit(100000).toArray();
+    return allRows.filter((row) => (row.namespace as string) === ns).length;
+  }
+
+  async listNamespaces(): Promise<string[]> {
+    await this.ensureInitialized();
+    const rows = await this.table!.search(Array.from({ length: this.vectorDim }).fill(0) as number[]).limit(10000).toArray();
+    const namespaces = new Set<string>();
+    for (const row of rows) {
+      namespaces.add((row.namespace as string) || "global");
+    }
+    return [...namespaces].toSorted();
   }
 }
 
@@ -150,16 +255,19 @@ class MemoryDB {
 // OpenAI Embeddings
 // ============================================================================
 
-class Embeddings {
+class Embeddings implements EmbeddingProvider {
   private client: OpenAI;
+  readonly provider = "openai";
+  readonly dimensions: number;
 
   constructor(
     apiKey: string,
-    private model: string,
+    private readonly model: string,
     baseUrl?: string,
-    private dimensions?: number,
+    dims?: number,
   ) {
     this.client = new OpenAI({ apiKey, baseURL: baseUrl });
+    this.dimensions = dims ?? vectorDimsForModel(model);
   }
 
   async embed(text: string): Promise<number[]> {
@@ -260,7 +368,7 @@ export function shouldCapture(text: string, options?: { maxChars?: number }): bo
 }
 
 export function detectCategory(text: string): MemoryCategory {
-  const lower = normalizeLowercaseStringOrEmpty(text);
+  const lower = toLower(text);
   if (/prefer|radši|like|love|hate|want/i.test(lower)) {
     return "preference";
   }
@@ -293,10 +401,44 @@ export default definePluginEntry({
     const { model, dimensions, apiKey, baseUrl } = cfg.embedding;
 
     const vectorDim = dimensions ?? vectorDimsForModel(model);
-    const db = new MemoryDB(resolvedDbPath, vectorDim);
-    const embeddings = new Embeddings(apiKey, model, baseUrl, dimensions);
+    const db = new MemoryDB(resolvedDbPath, vectorDim, cfg.namespace);
 
-    api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, lazy init)`);
+    const multimodalEnabled =
+      cfg.embeddingMultimodal &&
+      typeof cfg.embeddingMultimodal === "object" &&
+      (cfg.embeddingMultimodal as Record<string, unknown>).enabled === true;
+
+    let textEmbedder: EmbeddingProvider;
+    let multiEmbedder: EmbeddingProvider | null = null;
+
+    if (cfg.embedding.provider === "harrier") {
+      const harrier = new HarrierEmbeddings();
+      textEmbedder = {
+        embed: (text: string) => harrier.embed(text),
+        dimensions: harrier.dimensions,
+        provider: "harrier",
+      };
+    } else {
+      if (!apiKey) {
+        throw new Error("embedding.apiKey is required for non-harrier providers");
+      }
+      textEmbedder = new Embeddings(apiKey, model, baseUrl, dimensions);
+    }
+
+    if (multimodalEnabled) {
+      const imagebind = new ImageBindEmbeddings();
+      multiEmbedder = {
+        embed: (text: string) => imagebind.embedText(text),
+        dimensions: imagebind.dimensions,
+        provider: "imagebind",
+      };
+    }
+
+    const embeddings: EmbeddingProvider = textEmbedder;
+
+    api.logger.info(
+      `memory-lancedb: plugin registered (db: ${resolvedDbPath}, model: ${model}, namespace: ${cfg.namespace}, multimodal: ${multimodalEnabled})`,
+    );
 
     // ========================================================================
     // Tools
@@ -311,12 +453,64 @@ export default definePluginEntry({
         parameters: Type.Object({
           query: Type.String({ description: "Search query" }),
           limit: Type.Optional(Type.Number({ description: "Max results (default: 5)" })),
+          namespace: Type.Optional(
+            Type.String({
+              description:
+                "Memory namespace (default: configured namespace, 'all' for cross-namespace)",
+            }),
+          ),
         }),
         async execute(_toolCallId, params) {
-          const { query, limit = 5 } = params as { query: string; limit?: number };
+          const { query, limit = 5, namespace } = params as {
+            query: string;
+            limit?: number;
+            namespace?: string;
+          };
 
           const vector = await embeddings.embed(query);
-          const results = await db.search(vector, limit, 0.1);
+
+          let results: MemorySearchResult[];
+
+          if (multiEmbedder && multimodalEnabled) {
+            const textResults = await db.search(vector, limit * 2, 0.1, namespace);
+            const multiVector = await multiEmbedder.embed(query);
+            const multiResults = await db.searchMulti(multiVector, limit * 2, 0.1, namespace);
+
+            const fusionWeights = cfg.search && typeof cfg.search === "object"
+              ? { text: (cfg.search as Record<string, unknown>).text as number ?? 0.6, multi: (cfg.search as Record<string, unknown>).multi as number ?? 0.4 }
+              : DEFAULT_FUSION_WEIGHTS;
+
+            const fused = fuseScores(
+              textResults.map((r) => ({ id: r.entry.id, score: r.score })),
+              multiResults.map((r) => ({ id: r.entry.id, score: r.score })),
+              fusionWeights,
+            );
+
+            const byId = new Map(textResults.map((r) => [r.entry.id, r]));
+            for (const r of multiResults) {
+              if (!byId.has(r.entry.id)) {
+                byId.set(r.entry.id, r);
+              }
+            }
+
+            const ranked = fused
+              .toSorted((a, b) => b.score - a.score)
+              .slice(0, limit)
+              .filter((f) => f.score >= 0.1)
+              .map((f) => {
+                const original = byId.get(f.id)!;
+                return {
+                  entry: original.entry,
+                  score: f.score,
+                  textScore: f.textScore,
+                  multiScore: f.multiScore,
+                } as MemorySearchResult;
+              });
+
+            results = ranked;
+          } else {
+            results = await db.search(vector, limit, 0.1, namespace);
+          }
 
           if (results.length === 0) {
             return {
@@ -365,22 +559,36 @@ export default definePluginEntry({
               enum: [...MEMORY_CATEGORIES],
             }),
           ),
+          namespace: Type.Optional(
+            Type.String({
+              description: "Memory namespace (default: configured namespace)",
+            }),
+          ),
+          modality: Type.Optional(
+            Type.Unsafe<MemoryModality>({
+              type: "string",
+              enum: [...MEMORY_MODALITIES],
+            }),
+          ),
         }),
         async execute(_toolCallId, params) {
           const {
             text,
             importance = 0.7,
             category = "other",
+            namespace,
+            modality = "text" as MemoryModality,
           } = params as {
             text: string;
             importance?: number;
             category?: MemoryEntry["category"];
+            namespace?: string;
+            modality?: MemoryModality;
           };
 
           const vector = await embeddings.embed(text);
 
-          // Check for duplicates
-          const existing = await db.search(vector, 1, 0.95);
+          const existing = await db.search(vector, 1, 0.95, namespace);
           if (existing.length > 0) {
             return {
               content: [
@@ -402,6 +610,8 @@ export default definePluginEntry({
             vector,
             importance,
             category,
+            namespace: namespace ?? cfg.namespace!,
+            modality,
           });
 
           return {
@@ -421,9 +631,16 @@ export default definePluginEntry({
         parameters: Type.Object({
           query: Type.Optional(Type.String({ description: "Search to find memory" })),
           memoryId: Type.Optional(Type.String({ description: "Specific memory ID" })),
+          namespace: Type.Optional(
+            Type.String({ description: "Filter by namespace (default: configured namespace)" }),
+          ),
         }),
         async execute(_toolCallId, params) {
-          const { query, memoryId } = params as { query?: string; memoryId?: string };
+          const { query, memoryId, namespace } = params as {
+            query?: string;
+            memoryId?: string;
+            namespace?: string;
+          };
 
           if (memoryId) {
             await db.delete(memoryId);
@@ -435,7 +652,7 @@ export default definePluginEntry({
 
           if (query) {
             const vector = await embeddings.embed(query);
-            const results = await db.search(vector, 5, 0.7);
+            const results = await db.search(vector, 5, 0.7, namespace);
 
             if (results.length === 0) {
               return {
@@ -456,7 +673,6 @@ export default definePluginEntry({
               .map((r) => `- [${r.entry.id.slice(0, 8)}] ${r.entry.text.slice(0, 60)}...`)
               .join("\n");
 
-            // Strip vector data for serialization
             const sanitizedCandidates = results.map((r) => ({
               id: r.entry.id,
               text: r.entry.text,
@@ -495,9 +711,10 @@ export default definePluginEntry({
         memory
           .command("list")
           .description("List memories")
-          .action(async () => {
-            const count = await db.count();
-            console.log(`Total memories: ${count}`);
+          .option("--namespace <ns>", "Filter by namespace")
+          .action(async (opts) => {
+            const count = await db.count(opts.namespace);
+            console.log(`Total memories${opts.namespace ? ` in '${opts.namespace}'` : ""}: ${count}`);
           });
 
         memory
@@ -505,15 +722,16 @@ export default definePluginEntry({
           .description("Search memories")
           .argument("<query>", "Search query")
           .option("--limit <n>", "Max results", "5")
+          .option("--namespace <ns>", "Filter by namespace (default: configured, 'all' for cross-namespace)")
           .action(async (query, opts) => {
             const vector = await embeddings.embed(query);
-            const results = await db.search(vector, parseInt(opts.limit), 0.3);
-            // Strip vectors for output
+            const results = await db.search(vector, parseInt(opts.limit), 0.3, opts.namespace);
             const output = results.map((r) => ({
               id: r.entry.id,
               text: r.entry.text,
               category: r.entry.category,
               importance: r.entry.importance,
+              namespace: r.entry.namespace,
               score: r.score,
             }));
             console.log(JSON.stringify(output, null, 2));
@@ -522,9 +740,23 @@ export default definePluginEntry({
         memory
           .command("stats")
           .description("Show memory statistics")
+          .option("--namespace <ns>", "Filter by namespace")
+          .action(async (opts) => {
+            const count = await db.count(opts.namespace);
+            const namespaces = await db.listNamespaces();
+            console.log(`Total memories${opts.namespace ? ` in '${opts.namespace}'` : ""}: ${count}`);
+            console.log(`Namespaces: ${namespaces.join(", ")}`);
+          });
+
+        memory
+          .command("namespaces")
+          .description("List all memory namespaces")
           .action(async () => {
-            const count = await db.count();
-            console.log(`Total memories: ${count}`);
+            const namespaces = await db.listNamespaces();
+            for (const ns of namespaces) {
+              const count = await db.count(ns);
+              console.log(`  ${ns}: ${count} memories`);
+            }
           });
       },
       { commands: ["ltm"] },
@@ -543,7 +775,7 @@ export default definePluginEntry({
 
         try {
           const vector = await embeddings.embed(event.prompt);
-          const results = await db.search(vector, 3, 0.3);
+          const results = await db.search(vector, 3, 0.3, cfg.namespace);
 
           if (results.length === 0) {
             return;
@@ -570,16 +802,13 @@ export default definePluginEntry({
         }
 
         try {
-          // Extract text content from messages (handling unknown[] type)
           const texts: string[] = [];
           for (const msg of event.messages) {
-            // Type guard for message object
             if (!msg || typeof msg !== "object") {
               continue;
             }
             const msgObj = msg as Record<string, unknown>;
 
-            // Only process user messages to avoid self-poisoning from model output
             const role = msgObj.role;
             if (role !== "user") {
               continue;
@@ -587,13 +816,11 @@ export default definePluginEntry({
 
             const content = msgObj.content;
 
-            // Handle string content directly
             if (typeof content === "string") {
               texts.push(content);
               continue;
             }
 
-            // Handle array content (content blocks)
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (
@@ -610,7 +837,6 @@ export default definePluginEntry({
             }
           }
 
-          // Filter for capturable content
           const toCapture = texts.filter(
             (text) => text && shouldCapture(text, { maxChars: cfg.captureMaxChars }),
           );
@@ -618,14 +844,12 @@ export default definePluginEntry({
             return;
           }
 
-          // Store each capturable piece (limit to 3 per conversation)
           let stored = 0;
           for (const text of toCapture.slice(0, 3)) {
             const category = detectCategory(text);
             const vector = await embeddings.embed(text);
 
-            // Check for duplicates (high similarity threshold)
-            const existing = await db.search(vector, 1, 0.95);
+            const existing = await db.search(vector, 1, 0.95, cfg.namespace);
             if (existing.length > 0) {
               continue;
             }
@@ -635,6 +859,8 @@ export default definePluginEntry({
               vector,
               importance: 0.7,
               category,
+              namespace: cfg.namespace!,
+              modality: "text",
             });
             stored++;
           }
