@@ -311,6 +311,7 @@ export const ModelDefinitionSchema = z
     contextWindow: z.number().positive().optional(),
     contextTokens: z.number().int().positive().optional(),
     maxTokens: z.number().positive().optional(),
+    timeoutSeconds: z.number().int().positive().optional(),
     headers: z.record(z.string(), z.string()).optional(),
     compat: ModelCompatSchema,
   })

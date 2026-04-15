@@ -68,6 +68,7 @@ export type ModelDefinitionConfig = {
    */
   contextTokens?: number;
   maxTokens: number;
+  timeoutSeconds?: number;
   headers?: Record<string, string>;
   compat?: ModelCompatConfig;
 };

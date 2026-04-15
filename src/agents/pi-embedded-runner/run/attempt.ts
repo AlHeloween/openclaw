@@ -211,7 +211,11 @@ import {
 import { pruneProcessedHistoryImages } from "./history-image-prune.js";
 import { detectAndLoadPromptImages } from "./images.js";
 import { buildAttemptReplayMetadata } from "./incomplete-turn.js";
-import { resolveLlmIdleTimeoutMs, streamWithIdleTimeout } from "./llm-idle-timeout.js";
+import {
+  resolveLlmIdleTimeoutMs,
+  resolveModelTimeoutSeconds,
+  streamWithIdleTimeout,
+} from "./llm-idle-timeout.js";
 import {
   PREEMPTIVE_OVERFLOW_ERROR_TEXT,
   shouldPreemptivelyCompactBeforePrompt,
@@ -1269,6 +1273,11 @@ export async function runEmbeddedAttempt(
       const idleTimeoutMs = resolveLlmIdleTimeoutMs({
         cfg: params.config,
         trigger: params.trigger,
+        modelTimeoutSeconds: resolveModelTimeoutSeconds(
+          params.config,
+          params.provider,
+          params.modelId,
+        ),
       });
       if (idleTimeoutMs > 0) {
         activeSession.agent.streamFn = streamWithIdleTimeout(

@@ -20,7 +20,8 @@ export async function startGatewayDiscovery(params: {
   logDiscovery: { info: (msg: string) => void; warn: (msg: string) => void };
 }) {
   let bonjourStop: (() => Promise<void>) | null = null;
-  const mdnsMode = params.mdnsMode ?? "minimal";
+  const defaultMdnsMode = process.platform === "win32" ? "off" : "minimal";
+  const mdnsMode = params.mdnsMode ?? defaultMdnsMode;
   // mDNS can be disabled via config (mdnsMode: off) or env var.
   const bonjourEnabled =
     mdnsMode !== "off" &&

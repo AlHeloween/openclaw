@@ -277,7 +277,7 @@ export const FIELD_HELP: Record<string, string> = {
   "browser.remoteCdpHandshakeTimeoutMs":
     "Timeout in milliseconds for post-connect CDP handshake readiness checks against remote browser targets. Raise this for slow-start remote browsers and lower to fail fast in automation loops.",
   "discovery.mdns.mode":
-    'mDNS broadcast mode ("minimal" default, "full" includes cliPath/sshPort, "off" disables mDNS).',
+    'mDNS broadcast mode ("minimal" on macOS/Linux, "off" on Windows; "full" includes cliPath/sshPort, "off" disables mDNS).',
   discovery:
     "Service discovery settings for local mDNS advertisement and optional wide-area presence signaling. Keep discovery scoped to expected networks to avoid leaking service metadata.",
   "discovery.wideArea":
@@ -792,6 +792,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Skips upstream TLS certificate verification. Use only for controlled development environments.",
   "models.providers.*.models":
     "Declared model list for a provider including identifiers, metadata, and optional compatibility/cost hints. Keep IDs exact to provider catalog values so selection and fallback resolve correctly.",
+  "models.providers.*.models.*.timeoutSeconds":
+    "Per-model LLM idle timeout in seconds. Overrides the global `agents.defaults.llm.idleTimeoutSeconds` for this specific model. Useful for slow models or high-latency network environments.",
   auth: "Authentication profile root used for multi-profile provider credentials and cooldown-based failover ordering. Keep profiles minimal and explicit so automatic failover behavior stays auditable.",
   "channels.matrix.allowBots":
     'Allow messages from other configured Matrix bot accounts to trigger replies (default: false). Set "mentions" to only accept bot messages that visibly mention this bot.',

@@ -480,6 +480,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "models.providers.*.request.tls.serverName": "Model Provider Request TLS Server Name",
   "models.providers.*.request.tls.insecureSkipVerify": "Model Provider Request TLS Skip Verify",
   "models.providers.*.models": "Model Provider Model List",
+  "models.providers.*.models.*.timeoutSeconds": "Model Timeout (seconds)",
   "auth.cooldowns.billingBackoffHours": "Billing Backoff (hours)",
   "auth.cooldowns.billingBackoffHoursByProvider": "Billing Backoff Overrides",
   "auth.cooldowns.billingMaxHours": "Billing Backoff Cap (hours)",
