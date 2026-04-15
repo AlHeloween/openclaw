@@ -11,6 +11,7 @@ type EventHandlerChatLog = {
     result: unknown,
     options?: { partial?: boolean; isError?: boolean },
   ) => void;
+  appendToolOutput: (toolCallId: string, text: string) => void;
   addSystem: (text: string) => void;
   updateAssistant: (text: string, runId: string) => void;
   finalizeAssistant: (text: string, runId: string) => void;
@@ -337,7 +338,6 @@ export function createEventHandlers(context: EventHandlerContext) {
     if (evt.stream === "tool") {
       const verbose = state.sessionInfo.verboseLevel ?? "off";
       const allowToolEvents = verbose !== "off";
-      const allowToolOutput = verbose === "full";
       if (!allowToolEvents) {
         return;
       }
@@ -351,20 +351,27 @@ export function createEventHandlers(context: EventHandlerContext) {
       if (phase === "start") {
         chatLog.startTool(toolCallId, toolName, data.args);
       } else if (phase === "update") {
-        if (!allowToolOutput) {
-          return;
-        }
         chatLog.updateToolResult(toolCallId, data.partialResult, {
           partial: true,
         });
       } else if (phase === "result") {
-        if (allowToolOutput) {
-          chatLog.updateToolResult(toolCallId, data.result, {
-            isError: Boolean(data.isError),
-          });
-        } else {
-          chatLog.updateToolResult(toolCallId, { content: [] }, { isError: Boolean(data.isError) });
-        }
+        chatLog.updateToolResult(toolCallId, data.result, {
+          isError: Boolean(data.isError),
+        });
+      }
+      tui.requestRender();
+      return;
+    }
+    if (evt.stream === "command_output") {
+      const data = evt.data ?? {};
+      const toolCallId = asString(data.toolCallId, "");
+      if (!toolCallId) {
+        return;
+      }
+      const output = asString(data.output, "");
+      const cmdPhase = asString(data.phase, "");
+      if (output && cmdPhase === "delta") {
+        chatLog.appendToolOutput(toolCallId, output);
       }
       tui.requestRender();
       return;

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "update-001",
+      "timestamp": "2026-04-11T01:40:00.000Z",
+      "description": "Tool output visibility improvements: show exact tool results in TUI/Web UI regardless of verbose level, add command_output streaming, raise truncation limits, add details fallback",
+      "files": [
+        "src/gateway/server-chat.ts",
+        "src/tui/tui-event-handlers.ts",
+        "src/agents/pi-embedded-subscribe.tools.ts",
+        "src/tui/components/tool-execution.ts"
+      ]
+    }
+  ]
+}

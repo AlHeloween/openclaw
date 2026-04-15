@@ -12,7 +12,7 @@ import { collectTextContentBlocks } from "./content-blocks.js";
 import { type MessagingToolSend } from "./pi-embedded-messaging.js";
 import { normalizeToolName } from "./tool-policy.js";
 
-const TOOL_RESULT_MAX_CHARS = 8000;
+const TOOL_RESULT_MAX_CHARS = 1_000_000;
 const TOOL_ERROR_MAX_CHARS = 400;
 
 function truncateToolText(text: string): string {
@@ -130,10 +130,26 @@ export function extractToolResultText(result: unknown): string | undefined {
       return trimmed ? trimmed : undefined;
     })
     .filter((value): value is string => Boolean(value));
-  if (texts.length === 0) {
-    return undefined;
+  if (texts.length > 0) {
+    return texts.join("\n");
   }
-  return texts.join("\n");
+  const details = record.details;
+  if (details && typeof details === "object") {
+    const d = details as Record<string, unknown>;
+    if (typeof d.output === "string") {
+      return d.output;
+    }
+    if (typeof d.text === "string") {
+      return d.text;
+    }
+    if (typeof d.message === "string") {
+      return d.message;
+    }
+    if (typeof d.error === "string") {
+      return d.error;
+    }
+  }
+  return undefined;
 }
 
 // Core tool names that are allowed to emit local MEDIA: paths.

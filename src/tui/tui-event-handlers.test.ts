@@ -6,6 +6,7 @@ type MockFn = ReturnType<typeof vi.fn>;
 type HandlerChatLog = {
   startTool: (...args: unknown[]) => void;
   updateToolResult: (...args: unknown[]) => void;
+  appendToolOutput: (...args: unknown[]) => void;
   addSystem: (...args: unknown[]) => void;
   updateAssistant: (...args: unknown[]) => void;
   finalizeAssistant: (...args: unknown[]) => void;
@@ -19,6 +20,7 @@ type HandlerTui = { requestRender: (...args: unknown[]) => void };
 type MockChatLog = {
   startTool: MockFn;
   updateToolResult: MockFn;
+  appendToolOutput: MockFn;
   addSystem: MockFn;
   updateAssistant: MockFn;
   finalizeAssistant: MockFn;
@@ -34,6 +36,7 @@ function createMockChatLog(): MockChatLog & HandlerChatLog {
   return {
     startTool: vi.fn(),
     updateToolResult: vi.fn(),
+    appendToolOutput: vi.fn(),
     addSystem: vi.fn(),
     updateAssistant: vi.fn(),
     finalizeAssistant: vi.fn(),

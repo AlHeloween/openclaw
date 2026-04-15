@@ -1445,11 +1445,11 @@
       "@matrix-org/matrix-sdk-crypto-nodejs",
       "@napi-rs/canvas",
       "@tloncorp/api",
-      "@tloncorp/tlon-skill",
       "@whiskeysockets/baileys",
       "authenticate-pam",
       "esbuild",
       "node-llama-cpp",
+      "onnxruntime-node",
       "protobufjs",
       "sharp"
     ],

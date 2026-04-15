@@ -879,8 +879,7 @@ export function createAgentEventHandler({
     const isToolEvent = evt.stream === "tool";
     const isItemEvent = evt.stream === "item";
     const toolVerbose = isToolEvent ? resolveToolVerboseLevel(evt.runId, sessionKey) : "off";
-    // Build tool payload: strip result/partialResult unless verbose=full
-    const toolPayload =
+    const strippedToolPayload =
       isToolEvent && toolVerbose !== "full"
         ? (() => {
             const data = evt.data ? { ...evt.data } : {};
@@ -920,21 +919,16 @@ export function createAgentEventHandler({
       if (recipients && recipients.size > 0) {
         broadcastToConnIds(
           "agent",
-          sessionKey ? { ...toolPayload, ...buildSessionEventSnapshot(sessionKey) } : toolPayload,
+          sessionKey ? { ...agentPayload, ...buildSessionEventSnapshot(sessionKey) } : agentPayload,
           recipients,
         );
       }
-      // Session subscribers power operator UIs that attach to an existing
-      // in-flight session after the run has already started. Those clients do
-      // not know the runId in advance, so they cannot register as run-scoped
-      // tool recipients. Mirror tool lifecycle onto a session-scoped event so
-      // they can render live pending tool cards without polling history.
       if (sessionKey) {
         const sessionSubscribers = sessionEventSubscribers.getAll();
         if (sessionSubscribers.size > 0) {
           broadcastToConnIds(
             "session.tool",
-            { ...toolPayload, ...buildSessionEventSnapshot(sessionKey) },
+            { ...agentPayload, ...buildSessionEventSnapshot(sessionKey) },
             sessionSubscribers,
             { dropIfSlow: true },
           );
@@ -955,7 +949,9 @@ export function createAgentEventHandler({
         nodeSendToSession(
           sessionKey,
           "agent",
-          isToolEvent ? { ...toolPayload, ...buildSessionEventSnapshot(sessionKey) } : agentPayload,
+          isToolEvent
+            ? { ...strippedToolPayload, ...buildSessionEventSnapshot(sessionKey) }
+            : agentPayload,
         );
       }
       if (!isAborted && evt.stream === "assistant" && typeof evt.data?.text === "string") {

@@ -293,6 +293,14 @@ export class ChatLog extends Container {
     });
   }
 
+  appendToolOutput(toolCallId: string, text: string) {
+    const existing = this.toolById.get(toolCallId);
+    if (!existing) {
+      return;
+    }
+    existing.appendOutput(text);
+  }
+
   setToolsExpanded(expanded: boolean) {
     this.toolsExpanded = expanded;
     for (const tool of this.toolById.values()) {

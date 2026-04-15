@@ -35,21 +35,42 @@ function formatArgs(toolName: string, args: unknown): string {
 }
 
 function extractText(result?: ToolResult): string {
-  if (!result?.content) {
+  if (!result) {
     return "";
   }
-  const lines: string[] = [];
-  for (const entry of result.content) {
-    if (entry.type === "text" && entry.text) {
-      lines.push(sanitizeRenderableText(entry.text));
-    } else if (entry.type === "image") {
-      const mime = entry.mimeType ?? "image";
-      const size = entry.bytes ? ` ${Math.round(entry.bytes / 1024)}kb` : "";
-      const omitted = entry.omitted ? " (omitted)" : "";
-      lines.push(`[${mime}${size}${omitted}]`);
+  if (result.content) {
+    const lines: string[] = [];
+    for (const entry of result.content) {
+      if (entry.type === "text" && entry.text) {
+        lines.push(sanitizeRenderableText(entry.text));
+      } else if (entry.type === "image") {
+        const mime = entry.mimeType ?? "image";
+        const size = entry.bytes ? ` ${Math.round(entry.bytes / 1024)}kb` : "";
+        const omitted = entry.omitted ? " (omitted)" : "";
+        lines.push(`[${mime}${size}${omitted}]`);
+      }
+    }
+    const text = lines.join("\n").trim();
+    if (text) {
+      return text;
     }
   }
-  return lines.join("\n").trim();
+  if (result.details) {
+    const d = result.details;
+    if (typeof d.output === "string") {
+      return sanitizeRenderableText(d.output);
+    }
+    if (typeof d.text === "string") {
+      return sanitizeRenderableText(d.text);
+    }
+    if (typeof d.message === "string") {
+      return sanitizeRenderableText(d.message);
+    }
+    if (typeof d.error === "string") {
+      return sanitizeRenderableText(d.error);
+    }
+  }
+  return "";
 }
 
 export class ToolExecutionComponent extends Container {
@@ -102,6 +123,20 @@ export class ToolExecutionComponent extends Container {
   setPartialResult(result: ToolResult | undefined) {
     this.result = result;
     this.isPartial = true;
+    this.refresh();
+  }
+
+  appendOutput(text: string) {
+    if (!this.result) {
+      this.result = { content: [{ type: "text", text }] };
+    } else if (this.result.content) {
+      const existingText = this.result.content.find((c) => c.type === "text");
+      if (existingText) {
+        existingText.text = (existingText.text || "") + text;
+      } else {
+        this.result.content.push({ type: "text", text });
+      }
+    }
     this.refresh();
   }
 

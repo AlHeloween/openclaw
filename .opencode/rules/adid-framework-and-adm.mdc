@@ -143,17 +143,3 @@ alwaysApply: true
 
 - [PEP 8 – Style Guide for Python Code](https://peps.python.org/pep-0008/), [PEP 257 – Docstring, Conventions](https://peps.python.org/pep-0257/), [PEP 484 – Type Hints](https://peps.python.org/pep-0484/), [pytest documentation](https://docs.pytest.org/en/7.1.x/explanation/goodpractices.html), [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 
-<!-- ADID_ROLLBACK (from adm)
-  SDID_ROLLBACK {
-    "target_file": "D:\\zPython\\ADID_Python\\artefacts/rules/adid-framework-and-adm.mdc"
-    "update_script": "adm"
-    "backup_path": "D:\\zPython\\ADID_Python\\artefacts/rules/adid-framework-and-adm.mdc.backup_20260407T050638_822938"
-    "created_at": "2026-04-06T21:06:38.833817+00:00"
-    "backup_hash": "27f2bd07f2cce25b19cf2c85d695a0c0"
-    "new_hash": "78972f207ad025e77f0daad999847211"
-    "goal_id": "canonical_rule_inject_line"
-    "semantics": ""
-    "update_attrs": {"relative_path": "artefacts/rules/adid-framework-and-adm.mdc", "update_type": "text", "mode": "replace", "encoding": "utf-8", "find_pattern": null, "find_text": "- Inject input programmatically: append JSONL to `logs/cmd_runner/<run_id>/inbox.jsonl` (or use `scripts/cmd_runner_inbox_send.py`).", "replace_present": true}
-    "restore_cmd": "uv run adm \u002d\u002drollback \"D:\\zPython\\ADID_Python\\artefacts/rules/adid-framework-and-adm.mdc\""
-  }
--->
